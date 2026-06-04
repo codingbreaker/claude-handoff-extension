@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AI Handoff</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{width:300px;background:#0a0a14;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;font-size:13px}
+
+    /* ── Header ── */
+    .header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #1f2937}
+    .header-left{display:flex;align-items:center;gap:9px}
+    .logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#4c1d95);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+    .header h1{font-size:14px;font-weight:700;color:#c4b5fd;line-height:1}
+    .header p{font-size:10px;color:#4b5563;margin-top:2px}
+    .tab-btns{display:flex;gap:4px}
+    .tab-btn{padding:4px 10px;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer;transition:background .15s,color .15s;background:transparent;color:#6b7280}
+    .tab-btn.active{background:#1f2937;color:#c4b5fd}
+
+    /* ── Pages ── */
+    .page{display:none;padding:12px 16px}
+    .page.active{display:block}
+
+    /* ── Status row ── */
+    .status-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .site-label{color:#6b7280;font-size:11px}
+    .badge{padding:2px 9px;border-radius:99px;font-size:11px;font-weight:600;border:1px solid transparent}
+    .badge.green{background:#14532d22;color:#4ade80;border-color:#14532d}
+    .badge.amber{background:#78350f22;color:#fbbf24;border-color:#78350f}
+    .badge.gray{background:#1f2937;color:#6b7280;border-color:#374151}
+
+    /* ── Token card ── */
+    .token-card{background:#111827;border:1px solid #1f2937;border-radius:10px;padding:12px;margin-bottom:12px}
+    .tc-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .tc-name{font-size:12px;font-weight:700}
+    .tc-pct{font-size:12px;font-weight:700}
+    .tc-bar{height:4px;background:#1f2937;border-radius:99px;overflow:hidden;margin-bottom:7px}
+    .tc-fill{height:100%;border-radius:99px;transition:width .5s,background .3s}
+    .tc-row{display:flex;justify-content:space-between;font-size:11px;color:#6b7280}
+    .tc-val{font-weight:600}
+    .tc-windows{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+    .tc-win{background:#1a1a2e;border-radius:5px;padding:3px 8px;font-size:10px;font-weight:600;border:1px solid transparent}
+
+    /* ── Export btn ── */
+    .btn{width:100%;padding:10px;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:opacity .15s,transform .1s}
+    .btn:hover{opacity:.85;transform:translateY(-1px)}
+    .btn:active{transform:translateY(0)}
+    .btn-primary{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff}
+    .btn-ghost{background:#111827;color:#9ca3af;margin-top:6px;font-size:12px;padding:8px;border:1px solid #1f2937}
+
+    #status-msg{font-size:11px;text-align:center;min-height:16px;color:#6b7280;margin-top:8px}
+
+    /* ── Settings ── */
+    .s-section{margin-bottom:16px}
+    .s-title{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#4b5563;margin-bottom:8px;font-weight:600}
+    .s-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #111827}
+    .s-row:last-child{border-bottom:none}
+    .s-label{font-size:12px;color:#9ca3af}
+    .s-sub{font-size:10px;color:#4b5563;margin-top:1px}
+
+    /* Toggle switch */
+    .toggle{position:relative;width:36px;height:20px;flex-shrink:0}
+    .toggle input{opacity:0;width:0;height:0;position:absolute}
+    .toggle-track{position:absolute;inset:0;border-radius:99px;background:#1f2937;cursor:pointer;transition:background .2s}
+    .toggle input:checked+.toggle-track{background:#7c3aed}
+    .toggle-thumb{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .2s;pointer-events:none}
+    .toggle input:checked~.toggle-thumb{transform:translateX(16px)}
+
+    /* Select */
+    .s-select{background:#111827;border:1px solid #1f2937;color:#e2e8f0;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;cursor:pointer}
+
+    /* Slider */
+    .s-slider{width:80px;accent-color:#7c3aed;cursor:pointer}
+
+    /* ── AI open buttons ── */
+    .ai-open-btn{border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;padding:6px 4px;transition:opacity .15s,transform .1s;font-family:system-ui,-apple-system,sans-serif}
+    .ai-open-btn:hover{opacity:.8;transform:translateY(-1px)}
+
+    /* ── Footer ── */
+    .footer{padding:8px 16px 12px;border-top:1px solid #111827;text-align:center}
+    .footer a{font-size:10px;color:#4b5563;text-decoration:none}
+    .footer a:hover{color:#7c3aed}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">🔀</div>
+    <div>
+      <h1>AI Handoff</h1>
+      <p>by @codingbreaker</p>
+    </div>
+  </div>
+  <div class="tab-btns">
+    <button class="tab-btn active" data-tab="main">Main</button>
+    <button class="tab-btn" data-tab="settings">⚙️</button>
+  </div>
+</div>
+
+<!-- ── MAIN PAGE ── -->
+<div class="page active" id="tab-main">
+
+  <div class="status-row">
+    <span class="site-label">Current site</span>
+    <span id="site-badge" class="badge gray">—</span>
+  </div>
+
+  <div class="token-card" id="tok-card" style="display:none">
+    <div class="tc-header">
+      <span class="tc-name" id="tok-name">—</span>
+      <span class="tc-pct" id="tok-pct">—%</span>
+    </div>
+    <div class="tc-bar"><div class="tc-fill" id="tok-fill" style="width:0%"></div></div>
+    <div class="tc-row">
+      <span><span class="tc-val" id="tok-used">—</span> used</span>
+      <span><span class="tc-val" id="tok-left">—</span> left of <span id="tok-total">—</span></span>
+    </div>
+    <div class="tc-windows" id="tok-windows"></div>
+  </div>
+
+  <button class="btn btn-primary" id="export-btn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+      <polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/>
+    </svg>
+    Export Handoff
+  </button>
+
+  <div id="continue-section" style="display:none;margin-top:8px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#4b5563;margin-bottom:6px;font-weight:600">Continue on</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px">
+      <button class="ai-open-btn" data-url="https://chatgpt.com"           style="background:#10a37f22;border:1px solid #10a37f44;color:#10a37f">ChatGPT</button>
+      <button class="ai-open-btn" data-url="https://claude.ai/new"         style="background:#d9770622;border:1px solid #d9770644;color:#d97706">Claude</button>
+      <button class="ai-open-btn" data-url="https://gemini.google.com"     style="background:#4285f422;border:1px solid #4285f444;color:#4285f4">Gemini</button>
+      <button class="ai-open-btn" data-url="https://grok.com"              style="background:#1d9bf022;border:1px solid #1d9bf044;color:#1d9bf0">Grok</button>
+      <button class="ai-open-btn" data-url="https://www.perplexity.ai"     style="background:#20b2aa22;border:1px solid #20b2aa44;color:#20b2aa">Perplexity</button>
+      <button class="ai-open-btn" data-url="https://chat.deepseek.com"     style="background:#4d6bfe22;border:1px solid #4d6bfe44;color:#4d6bfe">DeepSeek</button>
+      <button class="ai-open-btn" data-url="https://chat.mistral.ai"       style="background:#ff6b3522;border:1px solid #ff6b3544;color:#ff6b35">Mistral</button>
+      <button class="ai-open-btn" data-url="https://copilot.microsoft.com" style="background:#0078d422;border:1px solid #0078d444;color:#0078d4">Copilot</button>
+      <button class="ai-open-btn" data-url="https://poe.com"               style="background:#9333ea22;border:1px solid #9333ea44;color:#9333ea">Poe</button>
+    </div>
+  </div>
+
+  <div id="status-msg"></div>
+</div>
+
+<!-- ── SETTINGS PAGE ── -->
+<div class="page" id="tab-settings">
+
+  <div class="s-section">
+    <div class="s-title">Token Counter</div>
+
+    <div class="s-row">
+      <div><div class="s-label">Show counter</div><div class="s-sub">Token usage pill on all AI sites</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showTokenCounter" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+
+    <div class="s-row">
+      <div><div class="s-label">Claude windows (5h / 7d)</div><div class="s-sub">Usage window badges</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showWindowBadges" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+
+    <div class="s-row">
+      <div><div class="s-label">Reset countdown</div><div class="s-sub">Time until window resets</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showResetTime" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+
+    <div class="s-row">
+      <div><div class="s-label">Cache timer</div><div class="s-sub">Claude prompt cache countdown</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showCacheTimer" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+
+    <div class="s-row">
+      <div><div class="s-label">~est label</div><div class="s-sub">Show when tokens are estimated</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showEstLabel" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+
+    <div class="s-row">
+      <div><div class="s-label">Opacity</div><div class="s-sub" id="opacity-val">88%</div></div>
+      <input type="range" class="s-slider" id="s-opacity" min="20" max="100" value="88">
+    </div>
+  </div>
+
+  <div class="s-section">
+    <div class="s-title">Export Button</div>
+    <div class="s-row">
+      <div><div class="s-label">Show export button</div><div class="s-sub">Pill on every AI site</div></div>
+      <label class="toggle"><input type="checkbox" id="s-showExportBtn" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+    </div>
+  </div>
+
+
+</div>
+
+<div class="footer">
+  <a href="https://github.com/codingbreaker" target="_blank">@codingbreaker · github.com/codingbreaker</a>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
