@@ -698,29 +698,27 @@ ${history}${sep}
         btn.innerHTML = '⏳ Injecting…'; btn.disabled = true;
 
         const inp = findInput();
+        clearStorage();
+
         if (!inp) {
-          // No input found — copy to clipboard
           navigator.clipboard.writeText(doc).then(() => {
             btn.innerHTML = '📋 Copied — press Ctrl+V';
-            btn.disabled = false;
-            clearStorage();
-          }).catch(() => { btn.innerHTML = '❌ Paste manually'; btn.disabled = false; });
+            setTimeout(() => dismiss(false), 2500);
+          }).catch(() => { btn.innerHTML = '❌ Paste manually'; setTimeout(() => dismiss(false), 2500); });
           return;
         }
 
         const ok = injectText(inp, doc);
-        clearStorage(); // always clear storage after attempt
 
         if (ok) {
-          btn.innerHTML = '✅ Done! Press Enter ↵ to send';
+          btn.innerHTML = '✅ Done! Press Enter ↵';
           btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
-          btn.disabled = false;
           setTimeout(() => dismiss(false), 2000);
         } else {
           navigator.clipboard.writeText(doc).then(() => {
             btn.innerHTML = '📋 Copied — press Ctrl+V';
-            btn.disabled = false;
-          }).catch(() => { btn.innerHTML = '❌ Paste manually'; btn.disabled = false; });
+            setTimeout(() => dismiss(false), 2500);
+          }).catch(() => { btn.innerHTML = '❌ Paste manually'; setTimeout(() => dismiss(false), 2500); });
         }
       };
 
