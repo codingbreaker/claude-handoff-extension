@@ -715,8 +715,7 @@ ${history}${sep}
           btn.innerHTML = '✅ Done! Press Enter ↵ to send';
           btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
           btn.disabled = false;
-          // Banner stays so user can verify — close with ✕
-          // keepAlive stops since storage cleared, banner won't re-appear on nav
+          setTimeout(() => dismiss(false), 2000);
         } else {
           navigator.clipboard.writeText(doc).then(() => {
             btn.innerHTML = '📋 Copied — press Ctrl+V';
