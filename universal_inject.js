@@ -293,62 +293,52 @@
   }
 
   // ══════════════════════════════════════════════════════════════════
-  //  COMPRESSION
-  // ══════════════════════════════════════════════════════════════════
-  function compress(turns) {
-    const rawLen = turns.reduce((s,t)=>s+t.text.length,0);
-    if (rawLen <= 14000 || turns.length <= 12) return { turns, compressed: false };
-    const first=turns.slice(0,2), mid=turns.slice(2,-10), last=turns.slice(-10);
-    const summary = {
-      role:'SUMMARY', y: mid[0]?.y||0,
-      text:`[${mid.length} EARLIER MESSAGES — SUMMARIZED]\n`+
-        mid.map((t,i)=>`  [${i+3}] ${t.role==='USER'?'User':'AI'}: ${t.text.slice(0,120).replace(/\n/g,' ')}…`).join('\n')+
-        '\n[END SUMMARY]',
-    };
-    return { turns:[...first, summary, ...last], compressed:true, original:turns.length };
-  }
-
-  // ══════════════════════════════════════════════════════════════════
-  //  BUILD HANDOFF DOCUMENT
+  //  BUILD HANDOFF DOCUMENT — token-efficient format
   // ══════════════════════════════════════════════════════════════════
   function buildDoc(turns) {
-    const {turns:final, compressed, original} = compress(turns);
-    const main  = document.querySelector('main,[role="main"]') || document.body;
-    const chars = (main.innerText||'').length;
-    const used  = Math.round(chars/3.8);
-    const left  = Math.max(0, platform.ctx - used);
-    const pct   = Math.min(100, Math.round(used/platform.ctx*100));
     const title = document.title.replace(/\s*[-–|].*$/,'').trim() || `${platform.name} Conversation`;
-    const sep   = '─'.repeat(58);
 
-    let history = '';
-    final.forEach(({role,text},i) => {
-      const label = role==='USER'?`👤 USER`:role==='AI'?`🤖 ${platform.name}`:role==='SUMMARY'?'📝 SUMMARY':`TURN ${i+1}`;
-      history += `### ${label}\n\n${text}\n\n${sep}\n\n`;
+    // Split: older context vs recent exchanges
+    const RECENT_COUNT = 6; // last N turns shown in full
+    const older  = turns.length > RECENT_COUNT ? turns.slice(0, -RECENT_COUNT) : [];
+    const recent = turns.length > RECENT_COUNT ? turns.slice(-RECENT_COUNT)    : turns;
+
+    // Build older summary — key points only, 1 line each
+    let olderSummary = '';
+    if (older.length > 0) {
+      const points = older.map(t => {
+        const who  = t.role === 'USER' ? 'User' : t.role === 'AI' ? platform.name : 'Note';
+        const snip = t.text.replace(/\n+/g,' ').trim().slice(0, 160);
+        return `• [${who}] ${snip}${t.text.length > 160 ? '…' : ''}`;
+      });
+      olderSummary = `## EARLIER CONTEXT (${older.length} messages — summarized)\n${points.join('\n')}\n`;
+    }
+
+    // Build recent messages in full
+    let recentHistory = '';
+    recent.forEach(({role, text}) => {
+      const who = role === 'USER' ? 'USER' : role === 'AI' ? platform.name.toUpperCase() : 'NOTE';
+      recentHistory += `### ${who}\n${text.trim()}\n\n`;
     });
 
-    return `═══════════════════════════════════════════════════════════
-  AI HANDOFF DOCUMENT
-  Source   : ${platform.name}
-  Topic    : ${title}
-  Exported : ${new Date().toLocaleString('en-US')}
-  Messages : ${turns.length} total${compressed?` (${original-final.length+1} mid summarized)`:''}
-  Tokens   : ~${fmt(used)} used / ~${fmt(left)} left (${pct}% of ${fmt(platform.ctx)})
-═══════════════════════════════════════════════════════════
+    // Last user message = current task
+    const lastUser = [...turns].reverse().find(t => t.role === 'USER');
+    const currentTask = lastUser ? lastUser.text.replace(/\n+/g,' ').trim().slice(0, 200) : '(see recent messages)';
 
-┌─ INSTRUCTIONS ─────────────────────────────────────────┐
-│  You are continuing a conversation from ${platform.name.padEnd(14)}  │
-│  Read everything below, then:                          │
-│  1. Confirm what the task/project is (1-2 lines).     │
-│  2. State the exact next step.                         │
-│  3. Continue — don't re-explain completed work.       │
-└────────────────────────────────────────────────────────┘
+    return `# AI HANDOFF — ${title}
+**From:** ${platform.name}  |  **Messages:** ${turns.length}  |  **Exported:** ${new Date().toLocaleString('en-US')}
 
-${sep}
+---
+## CURRENT TASK
+${currentTask}
 
-${history}${sep}
+---
+${olderSummary}
+## RECENT MESSAGES (last ${recent.length})
+${recentHistory}---
+**INSTRUCTIONS:** You are continuing this conversation. Do NOT re-introduce yourself or re-explain what was already done. Read the context above, then immediately continue from the current task. Keep your first response brief — confirm the task in 1 sentence, then proceed.
 
-— AI Handoff Extension · @codingbreaker · github.com/codingbreaker
+*— AI Handoff · @codingbreaker*
 `;
   }
 
