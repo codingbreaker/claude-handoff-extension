@@ -673,43 +673,51 @@ ${history}${sep}
       `;
       document.body.appendChild(banner);
 
-      // Keep banner alive — SPA re-renders can remove it from body
-      let _bannerDismissed = false;
+      // Keep banner alive — SPA re-renders can remove body children
+      let _alive = true;
       const _keepAlive = setInterval(() => {
-        if (_bannerDismissed) { clearInterval(_keepAlive); return; }
-        if (!document.getElementById('__hoff_banner')) document.body.appendChild(banner);
+        if (!_alive) return;
+        if (!document.body.contains(banner)) document.body.appendChild(banner);
       }, 800);
 
-      const clear = () => {
-        _bannerDismissed = true;
+      // clearStorage: remove handoff data so banner won't re-trigger elsewhere
+      const clearStorage = () => chrome.storage.local.remove(['handoff_doc','handoff_ts','handoff_count','handoff_from']);
+
+      // dismiss: stop keepAlive + remove banner from DOM
+      const dismiss = (andClearStorage = true) => {
+        _alive = false;
         clearInterval(_keepAlive);
-        chrome.storage.local.remove(['handoff_doc','handoff_ts','handoff_count','handoff_from']);
+        banner.remove();
+        if (andClearStorage) clearStorage();
       };
 
-      document.getElementById('__hb_x').onclick = () => { banner.remove(); clear(); };
+      banner.querySelector('#__hb_x').onclick = () => dismiss();
 
-      document.getElementById('__hb_inject').onclick = () => {
-        const btn = document.getElementById('__hb_inject');
+      banner.querySelector('#__hb_inject').onclick = () => {
+        const btn = banner.querySelector('#__hb_inject');
         btn.innerHTML = '⏳ Injecting…'; btn.disabled = true;
 
-        // Always re-find input at click time (SPA may have re-rendered)
         const inp = findInput();
         if (!inp) {
+          // No input found — copy to clipboard
           navigator.clipboard.writeText(doc).then(() => {
             btn.innerHTML = '📋 Copied — press Ctrl+V';
             btn.disabled = false;
+            clearStorage();
           }).catch(() => { btn.innerHTML = '❌ Paste manually'; btn.disabled = false; });
           return;
         }
 
         const ok = injectText(inp, doc);
+        clearStorage(); // always clear storage after attempt
+
         if (ok) {
-          btn.innerHTML = '✅ Injected! Press Enter to send';
+          btn.innerHTML = '✅ Done! Press Enter ↵ to send';
           btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
           btn.disabled = false;
-          // Don't auto-remove — user verifies text appeared, then clicks ✕
+          // Banner stays so user can verify — close with ✕
+          // keepAlive stops since storage cleared, banner won't re-appear on nav
         } else {
-          // Inject failed → copy to clipboard
           navigator.clipboard.writeText(doc).then(() => {
             btn.innerHTML = '📋 Copied — press Ctrl+V';
             btn.disabled = false;
@@ -717,10 +725,11 @@ ${history}${sep}
         }
       };
 
-      document.getElementById('__hb_copy').onclick = () => {
+      banner.querySelector('#__hb_copy').onclick = () => {
         navigator.clipboard.writeText(doc).then(() => {
-          document.getElementById('__hb_copy').textContent = '✅ Copied!';
-          setTimeout(() => { banner.remove(); clear(); }, 1800);
+          banner.querySelector('#__hb_copy').textContent = '✅ Copied!';
+          clearStorage();
+          setTimeout(() => dismiss(false), 1800);
         });
       };
     });
