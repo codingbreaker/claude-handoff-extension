@@ -254,22 +254,41 @@
   // S6: generic prose block grouping
   function _s6() { const main=document.querySelector('main')||document.body;const g=[],seen=new Set();let cur=null;main.querySelectorAll('p,pre,li,h1,h2,h3,blockquote').forEach(el=>{const text=el.innerText?.trim()||'';if(text.length<10||seen.has(text.slice(0,60)))return;seen.add(text.slice(0,60));const y=yPos(el);if(!cur||y-cur.lastY>200){if(cur)g.push(cur);cur={role:'UNKNOWN',parts:[text],y,lastY:y};}else{cur.parts.push(text);cur.lastY=y;}});if(cur)g.push(cur);return g.map(x=>({role:x.role,text:x.parts.join('\n'),y:x.y})); }
 
+  // Score a result: prefer strategies with BOTH USER+AI roles, penalize UNKNOWN-only
+  function scoreResult(turns) {
+    if (!turns.length) return -1;
+    const hasUser = turns.some(t => t.role === 'USER');
+    const hasAI   = turns.some(t => t.role === 'AI');
+    const allUnknown = turns.every(t => t.role === 'UNKNOWN');
+    // Filter out very short turns (UI snippets, button labels)
+    const meaningful = turns.filter(t => t.text.length > 40);
+    if (meaningful.length === 0) return -1;
+    // Score: both roles = 1000 + count, one role = 100 + count, all unknown = count only
+    if (hasUser && hasAI)  return 1000 + meaningful.length;
+    if (hasUser || hasAI)  return 100  + meaningful.length;
+    if (allUnknown)        return meaningful.length;
+    return meaningful.length;
+  }
+
   function extractMessages() {
     const fns = [_s1, _s2, _s3, _s4, _s5, _s6];
-    let best = [];
-    // Run ALL strategies, pick the one with the MOST messages
+    let best = [], bestScore = -1;
+
     for (let i = 0; i < fns.length; i++) {
       try {
         const r = dedup(fns[i]().sort((a,b) => a.y - b.y));
-        if (r.length > best.length) best = r;
+        const score = scoreResult(r);
+        if (score > bestScore) { bestScore = score; best = r; }
       } catch(_) {}
     }
-    // If all strategies empty, merge everything
-    if (best.length === 0) {
-      let merged = [];
-      fns.forEach(fn => { try { merged = merged.concat(fn()); } catch(_) {} });
-      best = dedup(merged.sort((a,b) => a.y - b.y));
-    }
+
+    // Filter out UNKNOWN turns if we have real USER/AI turns
+    const hasRealRoles = best.some(t => t.role === 'USER' || t.role === 'AI');
+    if (hasRealRoles) best = best.filter(t => t.role !== 'UNKNOWN');
+
+    // Drop turns that are too short to be real messages
+    best = best.filter(t => t.text.length > 15);
+
     return best;
   }
 
