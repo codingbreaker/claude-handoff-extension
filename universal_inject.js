@@ -673,31 +673,47 @@ ${history}${sep}
       `;
       document.body.appendChild(banner);
 
-      const clear = () => chrome.storage.local.remove(['handoff_doc','handoff_ts','handoff_count','handoff_from']);
+      // Keep banner alive — SPA re-renders can remove it from body
+      let _bannerDismissed = false;
+      const _keepAlive = setInterval(() => {
+        if (_bannerDismissed) { clearInterval(_keepAlive); return; }
+        if (!document.getElementById('__hoff_banner')) document.body.appendChild(banner);
+      }, 800);
+
+      const clear = () => {
+        _bannerDismissed = true;
+        clearInterval(_keepAlive);
+        chrome.storage.local.remove(['handoff_doc','handoff_ts','handoff_count','handoff_from']);
+      };
 
       document.getElementById('__hb_x').onclick = () => { banner.remove(); clear(); };
 
       document.getElementById('__hb_inject').onclick = () => {
         const btn = document.getElementById('__hb_inject');
-        btn.textContent = '⏳ Injecting…'; btn.disabled = true;
-        const inp = inputEl || findInput();
+        btn.innerHTML = '⏳ Injecting…'; btn.disabled = true;
+
+        // Always re-find input at click time (SPA may have re-rendered)
+        const inp = findInput();
         if (!inp) {
           navigator.clipboard.writeText(doc).then(() => {
-            btn.textContent = '📋 Copied — press Ctrl+V';
-            setTimeout(() => { banner.remove(); clear(); }, 2500);
-          });
+            btn.innerHTML = '📋 Copied — press Ctrl+V';
+            btn.disabled = false;
+          }).catch(() => { btn.innerHTML = '❌ Paste manually'; btn.disabled = false; });
           return;
         }
+
         const ok = injectText(inp, doc);
         if (ok) {
-          btn.textContent = '✅ Done! Context injected';
+          btn.innerHTML = '✅ Injected! Press Enter to send';
           btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
-          setTimeout(() => { banner.remove(); clear(); }, 2000);
+          btn.disabled = false;
+          // Don't auto-remove — user verifies text appeared, then clicks ✕
         } else {
+          // Inject failed → copy to clipboard
           navigator.clipboard.writeText(doc).then(() => {
-            btn.textContent = '📋 Copied — press Ctrl+V';
-            setTimeout(() => { banner.remove(); clear(); }, 2500);
-          });
+            btn.innerHTML = '📋 Copied — press Ctrl+V';
+            btn.disabled = false;
+          }).catch(() => { btn.innerHTML = '❌ Paste manually'; btn.disabled = false; });
         }
       };
 
@@ -716,21 +732,40 @@ ${history}${sep}
   function injectText(el, text) {
     try {
       el.focus();
-      if (el.contentEditable === 'true') {
-        while (el.firstChild) el.removeChild(el.firstChild);
-        const ok = document.execCommand('insertText', false, text);
-        if (ok && (el.innerText||'').trim().length > 20) return true;
-        el.textContent = text;
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
-        return (el.innerText||'').trim().length > 20;
-      }
+
       if (el.tagName === 'TEXTAREA') {
-        const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),'value')?.set;
+        // React textarea — use native setter so React state updates
+        const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set;
         if (setter) setter.call(el, text); else el.value = text;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('input',  { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         return el.value.length > 20;
       }
+
+      if (el.contentEditable === 'true') {
+        // 1. Clear existing content safely
+        while (el.firstChild) el.removeChild(el.firstChild);
+
+        // 2. Try execCommand (works in most contenteditable)
+        const ok = document.execCommand('insertText', false, text);
+        if (ok && (el.innerText || '').trim().length > 20) return true;
+
+        // 3. Fallback: set textContent + fire InputEvent (React/Lexical/ProseMirror)
+        el.textContent = text;
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+
+        // 4. If still empty (Gemini / some ProseMirror) — try inserting a text node
+        if ((el.innerText || '').trim().length < 20) {
+          el.innerHTML = '';
+          const node = document.createTextNode(text);
+          el.appendChild(node);
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }));
+        }
+
+        return (el.innerText || '').trim().length > 20;
+      }
+
       return false;
     } catch(e) { return false; }
   }
